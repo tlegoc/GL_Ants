@@ -1,0 +1,36 @@
+#version 430
+
+/*
+in uvec3 gl_NumWorkGroups;
+in uvec3 gl_WorkGroupID;
+in uvec3 gl_LocalInvocationID;
+in uvec3 gl_GlobalInvocationID;
+in uint gl_LocalInvocationIndex;
+*/
+
+struct Ant {
+  float position_x;
+  float position_y;
+
+  float direction_x;
+  float direction_y;
+
+  uint has_food;
+  uint is_alive;
+
+  uint anthill_position_x;
+  uint anthill_position_y;
+};
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) buffer ant_layout { Ant ant_data[]; };
+layout(binding = 1, r8ui) uniform uimage2D af_tex;
+layout(binding = 2, r16f) uniform image2D pher_tex;
+layout(binding = 3, rgba32f) uniform image2D render_tex;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+
+    imageStore(render_tex, coord, vec4(1.0));
+}
