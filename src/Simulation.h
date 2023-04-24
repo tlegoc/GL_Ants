@@ -12,6 +12,7 @@ public:
     void addAnthill(int x, int y);
     void addFood(int x, int y);
     void render();
+    void getRandomPosition(int *x, int *y);
 
     unsigned int getRenderTexture();
 

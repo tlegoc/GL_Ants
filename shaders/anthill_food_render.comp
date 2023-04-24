@@ -30,7 +30,15 @@ layout(binding = 2, r16f) uniform image2D pher_tex;
 layout(binding = 3, rgba32f) uniform image2D render_tex;
 
 void main() {
-    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
-    imageStore(render_tex, coord, vec4(1.0));
+  // Food value is stored in the first 7 bits of the af_tex
+  uint food_value = imageLoad(af_tex, coord).r & 0x7F;
+  vec4 food_color = vec4(.569, .921, .149, 1.0) * (food_value / 128.0);
+  bool anthill = (imageLoad(af_tex, coord).r & 0x80) != 0;
+  vec4 anthill_color = vec4(.921, .149, .149, 1.0) * float(anthill);
+  float pheromone_value = imageLoad(pher_tex, coord).r;
+  vec4 pheromone_color = vec4(0.0, .5, 0.5, 1.0) * pheromone_value;
+
+  imageStore(render_tex, coord, food_color + anthill_color + pheromone_value);
 }

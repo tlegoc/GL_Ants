@@ -32,4 +32,9 @@ layout(binding = 3, rgba32f) uniform image2D render_tex;
 void main() {
   uint ant_index = gl_GlobalInvocationID.x;
   Ant ant = ant_data[ant_index];
+
+  vec4 color = (ant.has_food == 0) ? vec4(1.0) : vec4(.5, 1.0, .5, 1.0);
+
+  // Display the ant on the screen
+  imageStore(render_tex, ivec2(ant.position_x, ant.position_y), color);
 }
