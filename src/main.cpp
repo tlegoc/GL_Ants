@@ -25,6 +25,7 @@ int main(int ArgCount, char **Args)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
     SDL_GLContext Context = SDL_GL_CreateContext(Window);
+    // SDL_GL_SetSwapInterval(0);
 
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 
@@ -75,12 +76,13 @@ int main(int ArgCount, char **Args)
             }
         }
 
-        sim.update(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count() * 1e-9);
-        sim.render();
+        float delta_time = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count() * 1e-9 * 50.0;
+        sim.update(delta_time);
+        sim.render(delta_time);
         start = Clock::now();
         glViewport(0, 0, WIDTH, HEIGHT);
-        // glClearColor(1.0f, .0f, .0f, 1.0f);
-        // glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(1.0f, .0f, .0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glBlitFramebuffer(0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT,

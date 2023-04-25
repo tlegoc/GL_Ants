@@ -11,13 +11,13 @@ public:
     void update(float delta);
     void addAnthill(int x, int y);
     void addFood(int x, int y);
-    void render();
+    void render(float delta);
     void getRandomPosition(int *x, int *y);
 
     unsigned int getRenderTexture();
 
 private:
-    void writeDataToAf(unsigned int x, unsigned int y, unsigned int val);
+    void writeDataToAf(unsigned int x, unsigned int y, unsigned int val, unsigned int radius = 1);
 
     const unsigned int m_width;
     const unsigned int m_height;
@@ -32,6 +32,7 @@ private:
 
     // Shader ids
     unsigned int m_ants_compute_id;
-    unsigned int m_render_compute_id;
+    unsigned int m_render_af_compute_id;
+    unsigned int m_render_ants_compute_id;
     unsigned int m_input_compute_id;
 };

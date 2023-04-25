@@ -1,6 +1,6 @@
 add_executable(AntsGL 
 main.cpp
-config.h
+Ant.h
 Simulation.h
 Simulation.cpp
 )

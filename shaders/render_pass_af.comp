@@ -24,21 +24,30 @@ struct Ant {
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = 0) buffer ant_layout { Ant ant_data[]; };
 layout(binding = 1, r8ui) uniform uimage2D af_tex;
 layout(binding = 2, r16f) uniform image2D pher_tex;
 layout(binding = 3, rgba32f) uniform image2D render_tex;
+layout(location = 1) uniform float delta_time;
 
 void main() {
   ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
+  // To avoid running too many instances that run on the entire image, we
+  // do the pheromone decay here.
+  // It decays by 0.01*current_value*delta_time.
+  float pheromone_value = imageLoad(pher_tex, coord).r;
+  pheromone_value -= 0.01 * pheromone_value * delta_time;
+  imageStore(pher_tex, coord, vec4(pheromone_value));
+
   // Food value is stored in the first 7 bits of the af_tex
   uint food_value = imageLoad(af_tex, coord).r & 0x7F;
-  vec4 food_color = vec4(.569, .921, .149, 1.0) * (food_value / 128.0);
-  bool anthill = (imageLoad(af_tex, coord).r & 0x80) != 0;
-  vec4 anthill_color = vec4(.921, .149, .149, 1.0) * float(anthill);
-  float pheromone_value = imageLoad(pher_tex, coord).r;
-  vec4 pheromone_color = vec4(0.0, .5, 0.5, 1.0) * pheromone_value;
+  vec3 food_color = vec3(.569, .921, .149) * (food_value / 128.0);
 
-  imageStore(render_tex, coord, food_color + anthill_color + pheromone_value);
+  bool anthill = (imageLoad(af_tex, coord).r & 0x80) != 0;
+  vec3 anthill_color = vec3(.921, .149, .149) * float(anthill);
+
+  vec3 pheromone_color = vec3(0.0, .5, 0.5) * pheromone_value / 255.0;
+
+  imageStore(render_tex, coord,
+             vec4(food_color + anthill_color + pheromone_color, 1.0));
 }

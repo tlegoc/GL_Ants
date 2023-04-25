@@ -1,9 +1,5 @@
 #pragma once
 
-#define ANT_SHADER_PATH "ants.comp"
-#define ANTHILL_FOOD_RENDER_SHADER_PATH "anthill_food_render.comp"
-#define INPUT_SHADER_PATH "input.comp"
-
 struct Ant {
     float position_x;
     float position_y;

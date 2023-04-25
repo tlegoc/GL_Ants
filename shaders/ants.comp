@@ -8,6 +8,9 @@ in uvec3 gl_GlobalInvocationID;
 in uint gl_LocalInvocationIndex;
 */
 
+#define SPEED 1.0
+#define PI 3.1415926535897932384626
+
 struct Ant {
   float position_x;
   float position_y;
@@ -28,13 +31,34 @@ layout(std430, binding = 0) buffer ant_layout { Ant ant_data[]; };
 layout(binding = 1, r8ui) uniform uimage2D af_tex;
 layout(binding = 2, r16f) uniform image2D pher_tex;
 layout(binding = 3, rgba32f) uniform image2D render_tex;
+layout(location = 1) uniform float delta_time;
+
+void updateAnt(Ant ant) {}
 
 void main() {
   uint ant_index = gl_GlobalInvocationID.x;
-  Ant ant = ant_data[ant_index];
 
-  vec4 color = (ant.has_food == 0) ? vec4(1.0) : vec4(.5, 1.0, .5, 1.0);
+  if (ant_data[ant_index].is_alive == 0) {
+    return;
+  }
 
-  // Display the ant on the screen
-  imageStore(render_tex, ivec2(ant.position_x, ant.position_y), color);
+  // If the ant is out of the render texture, it turns around
+  if (ant_data[ant_index].position_x < 0.0 || ant_data[ant_index].position_x > 1024.0 || ant_data[ant_index].position_y < 0.0 || ant_data[ant_index].position_y > 1024.0) {
+	ant_data[ant_index].direction_x *= -1.0;
+	ant_data[ant_index].direction_y *= -1.0;
+  }
+
+  // Normalize direction
+  float length = sqrt(ant_data[ant_index].direction_x * ant_data[ant_index].direction_x + ant_data[ant_index].direction_y * ant_data[ant_index].direction_y); 
+  ant_data[ant_index].direction_x /= length;
+
+  // move the ant in the direction it is facing
+  // and add pheromones : 100 if the ant has food, 10 otherwise
+  float currentPheromones = imageLoad(pher_tex, ivec2(ant_data[ant_index].position_x, ant_data[ant_index].position_y)).r;
+  imageStore(pher_tex, ivec2(ant_data[ant_index].position_x, ant_data[ant_index].position_y), vec4((ant_data[ant_index].has_food > 0 ? 100.0 : 10.0) + currentPheromones));
+
+  ant_data[ant_index].position_x +=
+      ant_data[ant_index].direction_x * delta_time;
+  ant_data[ant_index].position_y +=
+      ant_data[ant_index].direction_y * delta_time;
 }

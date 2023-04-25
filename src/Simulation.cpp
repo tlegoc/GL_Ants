@@ -1,6 +1,6 @@
 #include "Simulation.h"
 
-#include "config.h"
+#include "Ant.h"
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
 #include <iostream>
@@ -119,22 +119,27 @@ Simulation::Simulation(unsigned int width, unsigned int height, unsigned int max
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     // Shader creation
-    m_ants_compute_id = LoadShader(ANT_SHADER_PATH);
+    m_ants_compute_id = LoadShader("ants.comp");
 
-    m_input_compute_id = LoadShader(INPUT_SHADER_PATH);
+    m_input_compute_id = LoadShader("input.comp");
 
-    m_render_compute_id = LoadShader(ANTHILL_FOOD_RENDER_SHADER_PATH);
+    m_render_af_compute_id = LoadShader("render_pass_af.comp");
+
+    m_render_ants_compute_id = LoadShader("render_pass_ants.comp");
 
     m_anthill_count = 0;
 }
 
 void Simulation::update(float delta)
 {
-    // std::cout << "Updating: " << delta << std::endl;
     if (m_anthill_count <= 0)
         return;
 
+    std::cout << "Updating simulation... dt: " << delta << std::endl;
+
     glUseProgram(m_ants_compute_id);
+
+    unsigned int ants_compute_delta_time_un = glGetUniformLocation(m_ants_compute_id, "delta_time");
 
     // Bind SSBO
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_ant_ssbo_id);
@@ -146,6 +151,9 @@ void Simulation::update(float delta)
 
     glBindImageTexture(3, m_render_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
+    // Bind uniforms
+    glUniform1f(ants_compute_delta_time_un, delta);
+
     // std::cout << "Running " << m_anthill_count << " groups." << std::endl;
     glDispatchCompute(m_anthill_count, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -155,8 +163,6 @@ void Simulation::addAnthill(int x, int y)
 {
     if (m_anthill_count >= m_max_anthill_count)
         return;
-
-    m_anthill_count += 1;
 
     Ant ants[50];
 
@@ -184,6 +190,7 @@ void Simulation::addAnthill(int x, int y)
     // 0 if none, 1 if anthill
     writeDataToAf(x, y, 128);
     glNamedBufferSubData(m_ant_ssbo_id, m_anthill_count * 50 * sizeof(Ant), 50 * sizeof(Ant), ants);
+    m_anthill_count += 1;
 }
 
 void Simulation::addFood(int x, int y)
@@ -191,22 +198,41 @@ void Simulation::addFood(int x, int y)
     // Food is stored on the first 7 bits of the AF texture
     // 0x7F = 01111111
     // We can have up to 127 food sources on one pixel
-    writeDataToAf(x, y, 0x7F);
+    writeDataToAf(x, y, 0x7F, randomFloat() * 20 + 10);
 }
 
-void Simulation::render()
+void Simulation::render(float delta)
 {
-    glUseProgram(m_render_compute_id);
+    // Clear the render texture
+    glClearTexImage(m_render_tx_id, 0, GL_RGBA, GL_FLOAT, NULL);
 
-    // Bind SSBO
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_ant_ssbo_id);
+    // First pass, rendering anthills, food and pheromones
+    glUseProgram(m_render_af_compute_id);
+
+    unsigned int render_af_compute_delta_time_un = glGetUniformLocation(m_render_af_compute_id, "delta_time");
 
     // Bind textures
     glBindImageTexture(1, m_af_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R8UI);
     glBindImageTexture(2, m_pheromone_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R16F);
     glBindImageTexture(3, m_render_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
+    // Bind uniforms
+    glUniform1f(render_af_compute_delta_time_un, delta);
+
     glDispatchCompute(m_width, m_height, 1);
+
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    // Second pass, rendering ants
+    glUseProgram(m_render_ants_compute_id);
+
+    // Bind SSBO
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_ant_ssbo_id);
+
+    // Bind textures
+    glBindImageTexture(1, m_render_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+
+    glDispatchCompute(m_anthill_count, 1, 1);
 
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
@@ -222,7 +248,7 @@ unsigned int Simulation::getRenderTexture()
     return m_render_tx_id;
 }
 
-void Simulation::writeDataToAf(unsigned int x, unsigned int y, unsigned int val)
+void Simulation::writeDataToAf(unsigned int x, unsigned int y, unsigned int val, unsigned int radius)
 {
     std::cout << "Adding data to ant/food texture..." << std::endl;
     glUseProgram(m_input_compute_id);
@@ -232,11 +258,13 @@ void Simulation::writeDataToAf(unsigned int x, unsigned int y, unsigned int val)
     unsigned int input_compute_write_x_un = glGetUniformLocation(m_input_compute_id, "write_x");
     unsigned int input_compute_write_y_un = glGetUniformLocation(m_input_compute_id, "write_y");
     unsigned int input_compute_write_val_un = glGetUniformLocation(m_input_compute_id, "write_val");
+    unsigned int input_compute_radius_un = glGetUniformLocation(m_input_compute_id, "radius");
 
     // Print uniforms
     glUniform1ui(input_compute_write_x_un, x);
     glUniform1ui(input_compute_write_y_un, y);
     glUniform1ui(input_compute_write_val_un, val);
+    glUniform1ui(input_compute_radius_un, radius);
 
     glDispatchCompute(1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);

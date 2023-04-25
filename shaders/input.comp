@@ -6,8 +6,29 @@ layout(binding = 0, r8ui) uniform uimage2D af_tex;
 uniform uint write_x;
 uniform uint write_y;
 uniform uint write_val;
+uniform uint radius;
 
-void main()
-{
-    imageStore(af_tex, ivec2(write_x, write_y), uvec4(write_val));
+void main() {
+  uint anthill = imageLoad(af_tex, ivec2(write_x, write_y)).r & 0x80;
+
+  // write the value according to the radius
+  for (int i = -int(radius); i < int(radius); i++) {
+    for (int j = -int(radius); j < int(radius); j++) {
+      int x = int(write_x) + i;
+      int y = int(write_y) + j;
+
+      // Check if out of image2D bounds
+      if (x < 0 || x >= imageSize(af_tex).x || y < 0 ||
+          y >= imageSize(af_tex).y) {
+        continue;
+      }
+
+      // Check if in radius
+      if (i * i + j * j < int(radius) * int(radius)) {
+        imageStore(af_tex, ivec2(x, y), uvec4(write_val + anthill));
+      }
+    }
+  }
+
+  imageStore(af_tex, ivec2(write_x, write_y), uvec4(write_val + anthill));
 }
