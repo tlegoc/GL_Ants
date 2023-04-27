@@ -135,7 +135,7 @@ void Simulation::update(float delta)
     if (m_anthill_count <= 0)
         return;
 
-    std::cout << "Updating simulation... dt: " << delta << std::endl;
+    // std::cout << "Updating simulation... dt: " << delta << std::endl;
 
     glUseProgram(m_ants_compute_id);
 
@@ -156,7 +156,7 @@ void Simulation::update(float delta)
 
     // std::cout << "Running " << m_anthill_count << " groups." << std::endl;
     glDispatchCompute(m_anthill_count, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glMemoryBarrier(GL_ALL_BARRIER_BITS);
 }
 
 void Simulation::addAnthill(int x, int y)
@@ -221,7 +221,7 @@ void Simulation::render(float delta)
 
     glDispatchCompute(m_width, m_height, 1);
 
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
     // Second pass, rendering ants
     glUseProgram(m_render_ants_compute_id);
@@ -234,7 +234,7 @@ void Simulation::render(float delta)
 
     glDispatchCompute(m_anthill_count, 1, 1);
 
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glMemoryBarrier(GL_ALL_BARRIER_BITS);
 }
 
 void Simulation::getRandomPosition(int *x, int *y)
@@ -267,5 +267,5 @@ void Simulation::writeDataToAf(unsigned int x, unsigned int y, unsigned int val,
     glUniform1ui(input_compute_radius_un, radius);
 
     glDispatchCompute(1, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glMemoryBarrier(GL_ALL_BARRIER_BITS);
 }

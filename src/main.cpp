@@ -11,7 +11,7 @@
 #include "Simulation.h"
 
 #define WIDTH 1024
-#define HEIGHT 1024
+#define HEIGHT 700
 
 typedef std::chrono::high_resolution_clock Clock;
 
@@ -25,11 +25,11 @@ int main(int ArgCount, char **Args)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
     SDL_GLContext Context = SDL_GL_CreateContext(Window);
-    // SDL_GL_SetSwapInterval(0);
+    SDL_GL_SetSwapInterval(0);
 
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 
-    Simulation sim = Simulation(WIDTH, HEIGHT);
+    Simulation sim = Simulation(WIDTH, HEIGHT, 150);
 
     GLuint fboId = 0;
     glGenFramebuffers(1, &fboId);
@@ -77,9 +77,9 @@ int main(int ArgCount, char **Args)
         }
 
         float delta_time = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count() * 1e-9 * 50.0;
+        start = Clock::now();
         sim.update(delta_time);
         sim.render(delta_time);
-        start = Clock::now();
         glViewport(0, 0, WIDTH, HEIGHT);
         glClearColor(1.0f, .0f, .0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
