@@ -25,7 +25,7 @@ int main(int ArgCount, char **Args)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
     SDL_GLContext Context = SDL_GL_CreateContext(Window);
-    SDL_GL_SetSwapInterval(0);
+    SDL_GL_SetSwapInterval(1);
 
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 

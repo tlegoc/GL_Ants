@@ -1,12 +1,6 @@
 #version 430
 
-/*
-in uvec3 gl_NumWorkGroups;
-in uvec3 gl_WorkGroupID;
-in uvec3 gl_LocalInvocationID;
-in uvec3 gl_GlobalInvocationID;
-in uint gl_LocalInvocationIndex;
-*/
+// There's way too many ifs but I don't know how to do it better
 
 #define SPEED 1.0
 #define PI 3.1415926535897932384626
@@ -29,14 +23,49 @@ layout(local_size_x = 50, local_size_y = 1, local_size_z = 1) in;
 
 layout(std430, binding = 0) buffer ant_layout { Ant ant_data[]; };
 layout(binding = 1, r8ui) uniform uimage2D af_tex;
-layout(binding = 2, r16f) uniform image2D pher_tex;
+layout(binding = 2, r32f) uniform image2D pher_tex;
 layout(binding = 3, rgba32f) uniform image2D render_tex;
 layout(location = 1) uniform float delta_time;
 
-float rand(vec2 co) {
-  return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+// Random implementation from
+// https://stackoverflow.com/questions/4200224/random-noise-functions-for-glsl
+// A single iteration of Bob Jenkins' One-At-A-Time hashing algorithm.
+uint hash(uint x) {
+  x += (x << 10u);
+  x ^= (x >> 6u);
+  x += (x << 3u);
+  x ^= (x >> 11u);
+  x += (x << 15u);
+  return x;
 }
 
+// Compound versions of the hashing algorithm I whipped together.
+uint hash(uvec2 v) { return hash(v.x ^ hash(v.y)); }
+uint hash(uvec3 v) { return hash(v.x ^ hash(v.y) ^ hash(v.z)); }
+uint hash(uvec4 v) { return hash(v.x ^ hash(v.y) ^ hash(v.z) ^ hash(v.w)); }
+
+// Construct a float with half-open range [0:1] using low 23 bits.
+// All zeroes yields 0.0, all ones yields the next smallest representable value
+// below 1.0.
+float floatConstruct(uint m) {
+  const uint ieeeMantissa = 0x007FFFFFu; // binary32 mantissa bitmask
+  const uint ieeeOne = 0x3F800000u;      // 1.0 in IEEE binary32
+
+  m &= ieeeMantissa; // Keep only mantissa bits (fractional part)
+  m |= ieeeOne;      // Add fractional part to 1.0
+
+  float f = uintBitsToFloat(m); // Range [1:2]
+  return f - 1.0;               // Range [0:1]
+}
+
+// Pseudo-random value in half-open range [0:1].
+float random(float x) { return floatConstruct(hash(floatBitsToUint(x))); }
+float random(vec2 v) { return floatConstruct(hash(floatBitsToUint(v))); }
+float random(vec3 v) { return floatConstruct(hash(floatBitsToUint(v))); }
+float random(vec4 v) { return floatConstruct(hash(floatBitsToUint(v))); }
+
+
+// Ant updating code, run once for every ant
 void main() {
   uint ant_index = gl_GlobalInvocationID.x;
 
@@ -44,33 +73,27 @@ void main() {
     return;
   }
 
-  // If the ant is out of the render texture, it turns around
-  if (ant_data[ant_index].position_x < 0.0 || ant_data[ant_index].position_x > 1024.0 || ant_data[ant_index].position_y < 0.0 || ant_data[ant_index].position_y > 1024.0) {
-	  ant_data[ant_index].direction_x *= -1.0;
-	  ant_data[ant_index].direction_y *= -1.0;
-  }
 
   // Normalize direction
   float length = sqrt(ant_data[ant_index].direction_x * ant_data[ant_index].direction_x + ant_data[ant_index].direction_y * ant_data[ant_index].direction_y); 
   ant_data[ant_index].direction_x /= length;
+  
+  uint af_value = uint(imageLoad(af_tex, ivec2(ant_data[ant_index].position_x, ant_data[ant_index].position_y)).r);
+  uint food_below = uint(af_value & 0x7F);
+  uint anthill_value = uint(af_value & 0x80);
+
 
   if (ant_data[ant_index].food_quantity <= 0) {
-    uint af_value = uint(imageLoad(af_tex, ivec2(ant_data[ant_index].position_x, ant_data[ant_index].position_y)).r);
-    uint food_below = uint(af_value & 0x7F);
-    uint anthill_value = uint(af_value & 0x80);
 
-    if (food_below >= 0) {
+    if (food_below > 0) {
       // Update the food values
-      /*
-      int updated_food_below = int(food_below) - int(5 - ant_data[ant_index].food_quantity);
+      int updated_food_below = int(food_below) - 5 + int(ant_data[ant_index].food_quantity);
       ant_data[ant_index].food_quantity += int(food_below) - updated_food_below;
       imageStore(af_tex, ivec2(ant_data[ant_index].position_x, ant_data[ant_index].position_y), uvec4(max(updated_food_below, 0) | anthill_value));
 
       // Return to the anthill
-      
       ant_data[ant_index].direction_x = ant_data[ant_index].anthill_position_x - ant_data[ant_index].position_x;
       ant_data[ant_index].direction_y = ant_data[ant_index].anthill_position_y - ant_data[ant_index].position_y;
-      */
     } else {
       // If the ant perceives pheromones at any angle between -pi/2 and pi/2 and a distance of 8 or less
       // in fronts of it, it moves to the highest pheromone value
@@ -78,30 +101,30 @@ void main() {
       float max_pheromones_x = 0.0;
       float max_pheromones_y = 0.0;
 
-      for (float angle = -PI/2; angle < PI/2; angle += PI/16) {
-
-        for (int distance = 0; distance <= 8; distance++) {
-          float current_angle = atan(ant_data[ant_index].direction_y / ant_data[ant_index].direction_x);
-          float x = ant_data[ant_index].position_x + distance * cos(angle + current_angle);
-          float y = ant_data[ant_index].position_y + distance * sin(angle + current_angle);
-
-          float pheromones = imageLoad(pher_tex, ivec2(x, y)).r;
-
-          if (pheromones > max_pheromones) {
-            max_pheromones = pheromones;
-            max_pheromones_x = x;
-            max_pheromones_y = y;
+      // Scan an area of 16x16 around the ant
+      // Only check the pixels in front of the ant if the dot product
+      // is greater than 0 and distance of 8 or less
+      for (int i = -8; i < 8; i++) {
+        for (int j = -8; j < 8; j++) {
+          if (i * ant_data[ant_index].direction_x + j * ant_data[ant_index].direction_y > 0.0 && i * i + j * j <= 64 && i * i + j * j >= 1) {
+            float pheromones = imageLoad(render_tex, ivec2(ant_data[ant_index].position_x + i, ant_data[ant_index].position_y + j)).r;
+            if (pheromones > max_pheromones) {
+              max_pheromones = pheromones;
+              max_pheromones_x = ant_data[ant_index].position_x + i;
+              max_pheromones_y = ant_data[ant_index].position_y + j;
+            }
           }
         }
       }
-
-      if (max_pheromones > 0.0) {
+      
+      
+      if (max_pheromones > 0.01) {
         ant_data[ant_index].direction_x = max_pheromones_x - ant_data[ant_index].position_x;
         ant_data[ant_index].direction_y = max_pheromones_y - ant_data[ant_index].position_y;
       } else {
         // If the ant doesn't perceive pheromones, it rotates randomly 
         // between -pi/10 * delta_time and pi/10 * delta_time
-        float angle = (int(rand(vec2(29.0, -52.0))) % 20 - 10) * PI / 180.0 * delta_time;
+        float angle = (random(delta_time + ant_index)*2.0-1.0) * PI / 10.0 * delta_time;
         float new_direction_x = ant_data[ant_index].direction_x * cos(angle) - ant_data[ant_index].direction_y * sin(angle);
         float new_direction_y = ant_data[ant_index].direction_x * sin(angle) + ant_data[ant_index].direction_y * cos(angle);
 
@@ -109,18 +132,65 @@ void main() {
         ant_data[ant_index].direction_y = new_direction_y;
       }
     }
+  } else {
+    if (anthill_value >= 1) {
+      // If the ant is on the anthill, it drops the food and turns around
+      ant_data[ant_index].food_quantity = 0;
+      ant_data[ant_index].direction_x *= -1.0;
+      ant_data[ant_index].direction_y *= -1.0;
+    } else {
+      // If the ant has food, it moves to the anthill
+      // first they turn around, then they check for pheromones to follow.
+      // if there are no pheromones, they move straight to the anthill
+      ant_data[ant_index].direction_x = ant_data[ant_index].anthill_position_x - ant_data[ant_index].position_x;
+      ant_data[ant_index].direction_y = ant_data[ant_index].anthill_position_y - ant_data[ant_index].position_y;
+
+      float max_pheromones = 0.0;
+      float max_pheromones_x = 0.0;
+      float max_pheromones_y = 0.0;
+
+      // Scan an area of 16x16 around the ant
+      // Only check the pixels in front of the ant if the dot product
+      // is greater than 0 and distance of 8 or less
+      for (int i = -8; i < 8; i++) {
+        for (int j = -8; j < 8; j++) {
+          if (i * ant_data[ant_index].direction_x + j * ant_data[ant_index].direction_y > 0.0 && i * i + j * j <= 64 && i * i + j * j >= 1) {
+            float pheromones = imageLoad(render_tex, ivec2(ant_data[ant_index].position_x + i, ant_data[ant_index].position_y + j)).r;
+            if (pheromones > max_pheromones) {
+              max_pheromones = pheromones;
+              max_pheromones_x = ant_data[ant_index].position_x + i;
+              max_pheromones_y = ant_data[ant_index].position_y + j;
+            }
+          }
+        }
+      }
+
+      if (max_pheromones > 0.01) {
+        ant_data[ant_index].direction_x = max_pheromones_x - ant_data[ant_index].position_x;
+        ant_data[ant_index].direction_y = max_pheromones_y - ant_data[ant_index].position_y;
+      } else {
+        // If the ant doesn't perceive pheromones, it moves straight to the anthill
+        ant_data[ant_index].direction_x = ant_data[ant_index].anthill_position_x - ant_data[ant_index].position_x;
+        ant_data[ant_index].direction_y = ant_data[ant_index].anthill_position_y - ant_data[ant_index].position_y;
+      }
+    }
   }
 
   length = sqrt(ant_data[ant_index].direction_x * ant_data[ant_index].direction_x + ant_data[ant_index].direction_y * ant_data[ant_index].direction_y);
   ant_data[ant_index].direction_x /= length;
+  ant_data[ant_index].direction_y /= length;
 
   // move the ant in the direction it is facing
   // and add pheromones : 100 if the ant has food, 10 otherwise
   float currentPheromones = imageLoad(pher_tex, ivec2(ant_data[ant_index].position_x, ant_data[ant_index].position_y)).r;
-  imageStore(pher_tex, ivec2(ant_data[ant_index].position_x, ant_data[ant_index].position_y), vec4((ant_data[ant_index].food_quantity > 0 ? 100.0 : 10.0)*delta_time*10 + currentPheromones));
+  imageStore(pher_tex, ivec2(ant_data[ant_index].position_x, ant_data[ant_index].position_y), vec4((ant_data[ant_index].food_quantity > 0 ? 100.0 : 10.0) + currentPheromones));
 
   ant_data[ant_index].position_x +=
       ant_data[ant_index].direction_x * delta_time;
   ant_data[ant_index].position_y +=
       ant_data[ant_index].direction_y * delta_time;
+
+  // Clamp the position of the ant to the size of the texture
+  ant_data[ant_index].position_x = clamp(ant_data[ant_index].position_x, 0.0, imageSize(render_tex).x);
+  ant_data[ant_index].position_y = clamp(ant_data[ant_index].position_y, 0.0, imageSize(render_tex).y);
 }

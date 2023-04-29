@@ -105,7 +105,7 @@ Simulation::Simulation(unsigned int width, unsigned int height, unsigned int max
     glBindTexture(GL_TEXTURE_2D, m_pheromone_tx_id);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R16F, m_width, m_height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, m_width, m_height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
 
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -147,7 +147,7 @@ void Simulation::update(float delta)
     // Bind textures
     glBindImageTexture(1, m_af_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R8UI);
 
-    glBindImageTexture(2, m_pheromone_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R16F);
+    glBindImageTexture(2, m_pheromone_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32F);
 
     glBindImageTexture(3, m_render_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
@@ -213,7 +213,7 @@ void Simulation::render(float delta)
 
     // Bind textures
     glBindImageTexture(1, m_af_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R8UI);
-    glBindImageTexture(2, m_pheromone_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R16F);
+    glBindImageTexture(2, m_pheromone_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32F);
     glBindImageTexture(3, m_render_tx_id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
     // Bind uniforms
